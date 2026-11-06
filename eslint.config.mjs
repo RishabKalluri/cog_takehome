@@ -14,6 +14,7 @@ const eslintConfig = [
   {
     // Apps are self-contained: they may only import the platform and their own folder (also enforced by `pnpm validate`).
     files: ["src/apps/**/*.{ts,tsx}"],
+    ignores: ["src/apps/**/*.test.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
         "error",

@@ -4,9 +4,9 @@
  *  - manifests parse (roles referenced by actions/viewRole exist, semver version,
  *    non-empty owner, kebab slug — see src/platform/manifest.ts)
  *  - every manifest action has an implementation and vice versa
- *  - only actions.ts / seed.ts write to the DB; pages and components are read-only
- *  - only actions.ts, seed.ts, schema.ts, page.tsx (and tests) import the DB client
- *  - apps never import from other apps
+ *  - UI files (.tsx) never write to the DB (.insert/.update/.delete); writes live in actions or helpers they call
+ *  - only actions.ts, seed.ts, schema.ts, page.tsx import the live DB client (type-only imports are fine anywhere)
+ *  - apps never import from other apps (test files are exempt from all three source rules)
  * Rule logic lives in scripts/lib/validate-rules.ts (unit-tested).
  */
 import fs from "node:fs";

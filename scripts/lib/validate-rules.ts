@@ -5,12 +5,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** Files in an app folder that may import the DB client at all. */
+/** Files in an app folder that may import the DB client (a live connection). Type-only imports are fine anywhere. */
 export const DB_CLIENT_ALLOWED = ["actions.ts", "seed.ts", "schema.ts", "page.tsx"];
-/** Files in an app folder that may write to the DB. Everything else is read-only. */
-export const DB_WRITE_ALLOWED = ["actions.ts", "seed.ts"];
+/** UI files (.tsx) are read-only: writes belong in actions (or helpers they call). */
+const UI_FILE_RE = /\.tsx$/;
 
-const DB_CLIENT_RE = /from\s+["'](?:@\/platform\/db\/client|(?:\.\.\/)+platform\/db\/client)["']/;
+const DB_CLIENT_RE = /import\s+(?!type\b)[^;]*?from\s+["'](?:@\/platform\/db\/client|(?:\.\.\/)+platform\/db\/client)["']/;
 const WRITE_RE = /\.(insert|update|delete)\s*\(/g;
 const IMPORT_RE = /(?:import|export)\s[^;]*?from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
@@ -29,7 +29,7 @@ export function readAppSources(appDir: string): SourceFile[] {
   return out;
 }
 
-/** Rules (a) and (b) from the piece-5 spec, applied to one app's source files. */
+/** DB-access and isolation rules, applied to one app's source files. Test files are exempt (not shipped). */
 export function checkAppSources(slug: string, files: SourceFile[]): string[] {
   const errors: string[] = [];
   for (const f of files) {
@@ -40,10 +40,11 @@ export function checkAppSources(slug: string, files: SourceFile[]): string[] {
     if (!isTest && DB_CLIENT_RE.test(f.content) && !DB_CLIENT_ALLOWED.includes(base)) {
       errors.push(`${where}: imports @/platform/db/client — only ${DB_CLIENT_ALLOWED.join(", ")} may (pages read-only)`);
     }
-    if (!isTest && !DB_WRITE_ALLOWED.includes(base)) {
+    if (!isTest && UI_FILE_RE.test(base)) {
       const writes = [...stripComments(f.content).matchAll(WRITE_RE)].map((m) => `.${m[1]}(`);
       if (writes.length) errors.push(`${where}: calls ${[...new Set(writes)].join(" ")} — pages/components must not write to the DB; declare an action in actions.ts and use <ActionForm>/<ActionButton>`);
     }
+    if (isTest) continue;
     for (const spec of importSpecifiers(f.content)) {
       const other = otherAppImport(slug, f.rel, spec);
       if (other) errors.push(`${where}: imports from src/apps/${other} — apps may not import from other apps`);

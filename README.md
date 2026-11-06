@@ -73,7 +73,7 @@ Written for someone who hasn't seen Power Apps' internals.
 
 **Try it as different people.** The top-right "Signed in as" dropdown shows who you are; picking another name impersonates mock users with different groups so permissions can be demonstrated in seconds. (Demo only; removed when real login is wired in.)
 
-**Guardrails in CI.** `pnpm check` runs type-checking, the test suite, and `pnpm validate`, which fails the build if an app folder isn't registered, a manifest references an undeclared role, an action is implemented without a declared role (and would therefore be unreachable), a page or component writes to the database directly, or an app imports from another app.
+**Guardrails in CI.** `pnpm check` runs type-checking, the test suite, and `pnpm validate`, which fails the build if an app folder isn't registered, a manifest references an undeclared role, an action is implemented without a declared role (and would therefore be unreachable), a page or component (`.tsx`) writes to the database directly, or an app imports from another app.
 
 ---
 
@@ -255,7 +255,7 @@ This is the part that replaces the Power Apps maker studio. A business owner wri
 
 **What the generator produces.** A complete, working app for one entity — table (`<slug>_<entity>s` with id, title, status, notes, created_by, created_at, updated_at), three actions (`create`, `update`, `archive`) with zod validation and before/after audit data, a responsive list + form page, seed rows, vitest tests for the happy path / denied role / invalid input — plus the two one-line registrations (`src/platform/registry.ts`, `src/db/schema.ts`). It passes `pnpm check`, `pnpm lint` and `pnpm build` with zero edits, so Devin starts from green and only has to change what the spec needs. It refuses to run if the slug already exists.
 
-**What guards it.** `pnpm validate` enforces the conventions the platform relies on: every app folder is registered; manifests are valid (semver version, non-empty owner, kebab slug, roles exist before actions reference them); declared actions ⇔ implemented actions; only `actions.ts`/`seed.ts` may write to the DB (pages are read-only, so RBAC and audit cannot be bypassed); apps never import from other apps (also an ESLint rule). These rules are unit-tested against fixture snippets in `scripts/lib/validate-rules.test.ts`.
+**What guards it.** `pnpm validate` enforces the conventions the platform relies on: every app folder is registered; manifests are valid (semver version, non-empty owner, kebab slug, roles exist before actions reference them); declared actions ⇔ implemented actions; UI files (`.tsx`) never write to the DB — writes live in actions or the `.ts` helpers they call — so RBAC and audit cannot be bypassed from a screen; only `actions.ts`/`seed.ts`/`schema.ts`/`page.tsx` import the live DB client (type-only imports of `Db` are fine anywhere); apps never import from other apps (also an ESLint rule). Test files are exempt. These rules are unit-tested against fixture snippets in `scripts/lib/validate-rules.test.ts`.
 
 **Live demo (final step of the POC).** Give a fresh Devin session the Refunds spec above and watch it produce the PR. The Refunds app is deliberately *not* in this repo yet so that the demo is real.
 

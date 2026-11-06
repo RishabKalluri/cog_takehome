@@ -25,7 +25,14 @@ describe("validate: DB access rules", () => {
     expect(checkAppSources("notes", [{ rel: "components/row.tsx", content: "db.update(notes).set({}).run();" }])[0]).toMatch(/components\/row\.tsx: calls \.update\(/);
   });
 
-  it("rejects DB client imports outside the allowed files", () => {
+  it("allows write helpers in .ts files that receive a Db (type-only import)", () => {
+    const errors = checkAppSources("deployments", [
+      { rel: "promote.ts", content: 'import type { Db } from "@/platform/db/client";\nexport function record(db: Db) { return db.insert(deployments).values({}).run(); }' },
+    ]);
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects live DB client imports outside the allowed files", () => {
     const errors = checkAppSources("notes", [{ rel: "helpers.ts", content: 'import { getDb } from "../../platform/db/client";' }]);
     expect(errors[0]).toMatch(/helpers\.ts: imports @\/platform\/db\/client/);
   });
@@ -40,6 +47,10 @@ describe("validate: no cross-app imports", () => {
     expect(errors).toHaveLength(2);
     expect(errors[0]).toMatch(/imports from src\/apps\/feature-flags/);
     expect(errors[1]).toMatch(/imports from src\/apps\/example-notes/);
+  });
+
+  it("exempts test files (they may reference other apps' fixtures)", () => {
+    expect(checkAppSources("deployments", [{ rel: "actions.test.ts", content: 'import { manifest } from "@/apps/example-notes/manifest";' }])).toEqual([]);
   });
 
   it("allows imports within the same app and from the platform", () => {
