@@ -14,10 +14,11 @@ A small platform for building internal business apps (KYC review queue, refunds 
 4. [Demo script](#demo-script)
 5. [Architecture](#architecture)
 6. [Anatomy of an app](#anatomy-of-an-app)
-7. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
-8. [Decision log & tradeoffs](#decision-log--tradeoffs)
-9. [Deliberately not built (yet)](#deliberately-not-built-yet)
-10. [Roadmap](#roadmap)
+7. [KYC review queue](#kyc-review-queue)
+8. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
+9. [Decision log & tradeoffs](#decision-log--tradeoffs)
+10. [Deliberately not built (yet)](#deliberately-not-built-yet)
+11. [Roadmap](#roadmap)
 
 ---
 
@@ -129,7 +130,7 @@ flowchart LR
   subgraph Apps["Apps (one folder each)"]
     A1[example-notes]
     A2[feature-flags*]
-    A3[kyc-review*]
+    A3[kyc-review]
     A4[audit-log viewer*]
   end
 
@@ -273,6 +274,41 @@ Nothing is deleted or redeployed; turning the flag back on restores the app inst
 
 ---
 
+## KYC review queue
+
+The first *workflow* app (roadmap item 3), as opposed to the CRUD reference app. A KYC ("Know Your Customer") case is one prospective customer's onboarding file: identity documents, country, and a risk score 0–100 produced upstream. The compliance team must take each case through a decision, and regulators later ask "who approved this, when, on what grounds, and who tried to and was refused". That last question is exactly what the platform's audit log answers for free.
+
+**The workflow.** A case starts `pending`. A reviewer *claims* it (`in_review`, assigned to them), then *approves*, *rejects* or *escalates* it with a written reason (10+ characters). Cases with a risk score of **80 or more cannot be approved by a reviewer** — the only way forward is to escalate, and a supervisor records the decision. Supervisors can also *release* a case someone else is sitting on and *reopen* an approved/rejected case back to `pending`. All of this is enforced in `src/apps/kyc-review/actions.ts`; the screens only hide buttons that would fail.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> in_review: claim (reviewer)
+  in_review --> pending: release (assignee or supervisor)
+  in_review --> approved: approve (assignee, risk < 80)
+  in_review --> rejected: reject (assignee)
+  in_review --> escalated: escalate (assignee or supervisor)
+  escalated --> approved: supervisorDecide
+  escalated --> rejected: supervisorDecide
+  approved --> pending: reopen (supervisor)
+  rejected --> pending: reopen (supervisor)
+```
+
+**Who can do what (mock users).**
+
+| Step | Use | Why |
+|---|---|---|
+| Read the queue and any case's history, nothing else | **Lena** (auditors, kyc-viewers) | `viewer` role only — the action panel says "read-only" and any crafted request is denied *and logged* |
+| Claim, approve (risk < 80), reject, escalate | **Marcus** (kyc-reviewers) | `reviewer` |
+| Everything Marcus can, plus decide escalated cases, release others' cases, reopen closed ones | **Dana** (kyc-reviewers + kyc-supervisors) | `reviewer` + `supervisor` |
+| See the app at all | **not Sam, not Omar** | Neither holds a group granting `viewer`: the app is missing from their navigation and `/apps/kyc-review` shows the access-denied state |
+
+**Suggested demo (5 clicks).** As Marcus, open *KYC Review Queue* → claim **Viktor Petrov** (risk 88) → open the case: the approve form is replaced by an "escalate instead" notice → escalate with a reason → switch to Dana, open the case, record the supervisor decision. The *History* panel at the bottom is the audit log filtered to that case: `claim`, `escalate`, `supervisorDecide`, each with actor, before→after state and outcome.
+
+**Where the audit log earns its keep.** The case page reads `audit_log` rows with `app_slug = 'kyc-review'` and `entity_id = <case id>` and shows them as a timeline — no app-specific history table was written. Denied attempts are logged too; they appear in the platform-wide audit viewer (roadmap item 4) rather than on the case, because the gateway refuses before the handler can name the entity.
+
+---
+
 ## Identity: mock today, Entra ID tomorrow
 
 **What Entra ID is.** Microsoft's identity service (formerly Azure AD). If the client runs Power Apps, their staff already sign in with it and their team memberships ("KYC-Reviewers") are Entra security groups.
@@ -307,6 +343,7 @@ Kept short and current. Newest at the bottom.
 | 13 | **Viewer apps read platform tables directly, no API layer** (Audit Log and Deployments query `audit_log` / `deployments` with Drizzle from their server components) | An internal `/api/audit` layer; a repository/connector abstraction per table | Pages are server-only and read-only, so RBAC on the page (`viewRole`) is the whole access check; an API layer would be a second surface to secure for zero new capability. Cost: the apps couple to platform table shapes, so a schema change touches them. | A client outside this Next.js process needs the data, or row-level filtering of the audit trail per team |
 | 14 | **Promotion is a recorded event, not an orchestrated deploy** (`promote` action and `pnpm promote` insert a `deployments` row with the manifest version + build SHA) | Have the platform trigger CI / run the deploy; infer deployments from CI webhooks | The POC has no deploy target; recording keeps the "what is live where" question answerable (and audited, including denied attempts) without pretending to ship code. CI already owns releases; it should call `pnpm promote` as its last step. | A real pipeline exists — wire CI to write the row, then consider making the UI button trigger the pipeline behind an approval |
 | 15 | **Kill switch = a reserved feature flag (`app:<slug>:enabled`) checked in the gateway** | Env var / config file (needs a redeploy or restart to flip — too slow in an incident, and not audited); a separate `app_status` table (one more thing to build UI, audit and permissions for); hiding the app in the nav only (UI-only, bypassable) | The flags app already has the UI, RBAC and audit trail, so a kill switch is one seeded row per app and one `if` in the gateway — flipping it is itself an audited action with before/after. Checking in the gateway (not the UI) means every mutation path is covered, including crafted requests. The flags app is exempt so an admin can always turn things back on. Cost: the platform reads one app-owned table (`src/platform/flags.ts`). | Flags need to vary per environment or per tenant — move the table into the platform schema |
+| 16 | **Workflow state machines live in each app's action handlers** (KYC: `expectStatus` / `expectAssignee` helpers + one `transition` per action), not in a generic workflow engine | A platform-level workflow/state-machine engine (declare states + transitions in the manifest); an external engine such as Temporal or Camunda; status columns with no enforcement | Every KYC rule (who may move a case, which states, the risk-score cut-off) is ~5 lines of ordinary TypeScript that a reviewer can read and a unit test can hit. The gateway already gives the parts a workflow engine sells (auth, audit, before/after). A generic engine would be a second DSL to design before any app benefits, and real rules ("high risk needs a supervisor") rarely fit a pure state table. | A third workflow app repeats the same helpers (then lift `expectStatus`/`transition` into `src/platform/workflow.ts`); or a workflow needs timers, SLAs or multi-step approvals that outlive one request |
 
 ---
 
@@ -325,7 +362,7 @@ Built piece by piece so each can be assessed in isolation.
 |---|---|---|---|
 | 1 | **Platform core** — manifest, identity seam + mock users, RBAC, action gateway, audit log, versions, shell UI, reference app, tests, CI | The security/governance model and how small an app is | ✅ this PR |
 | 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | ✅ [PR #2](https://github.com/RishabKalluri/cog_takehome/pull/2) |
-| 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | planned |
+| 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | ✅ [PR #5](https://github.com/RishabKalluri/cog_takehome/pull/5) |
 | 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | ✅ PR #4 |
 | 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | planned |
 

@@ -34,7 +34,7 @@ const tones: Record<string, string> = {
   purple: "bg-purple-100 text-purple-800",
 };
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: keyof typeof tones }) {
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
 const buttonVariants = {

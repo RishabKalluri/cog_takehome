@@ -7,6 +7,7 @@ import exampleNotes from "@/apps/example-notes";
 import auditLogApp from "@/apps/audit-log";
 import deploymentsApp from "@/apps/deployments";
 import featureFlags from "@/apps/feature-flags";
+import kycReview from "@/apps/kyc-review";
 
 export type AppPageProps = {
   user: User;
@@ -28,6 +29,7 @@ export const apps: AppDefinition[] = [
   auditLogApp,
   deploymentsApp,
   featureFlags,
+  kycReview,
 ];
 
 export function getApp(slug: string): AppDefinition | undefined {
