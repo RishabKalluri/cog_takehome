@@ -28,6 +28,10 @@ function Matrix({ canPromote }: { canPromote: boolean }) {
     manifest: a.manifest,
     cells: Object.fromEntries(ENVIRONMENTS.map((env) => [env, latestDeployment(db, a.manifest.slug, env)])) as Record<Environment, Deployment | undefined>,
   }));
+  const groups = [
+    { title: "Apps", rows: rows.filter((r) => r.manifest.kind === "app") },
+    { title: "Platform", rows: rows.filter((r) => r.manifest.kind === "platform") },
+  ];
   const behind = rows.flatMap((r) => ENVIRONMENTS.filter((env) => isBehind(r.cells[env], r.manifest.version)).map((env) => `${r.manifest.slug} in ${env}`));
 
   return (
@@ -45,41 +49,45 @@ function Matrix({ canPromote }: { canPromote: boolean }) {
         </Callout>
       </div>
 
-      <Card title="App × environment">
-        <div className="hidden sm:block">
-          <Table headers={["App", ...ENVIRONMENTS]}>
-            {rows.map((r) => (
-              <tr key={r.manifest.slug}>
-                <Td className="whitespace-nowrap">
-                  <AppName manifest={r.manifest} />
-                </Td>
-                {ENVIRONMENTS.map((env) => (
-                  <Td key={env}>
-                    <Cell d={r.cells[env]} current={r.manifest.version} />
+      <div className="space-y-6">
+        {groups.map((g) => (
+          <Card key={g.title} title={`${g.title} × environment`}>
+          <div className="hidden sm:block">
+            <Table headers={["App", ...ENVIRONMENTS]}>
+              {g.rows.map((r) => (
+                <tr key={r.manifest.slug}>
+                  <Td className="whitespace-nowrap">
+                    <AppName manifest={r.manifest} />
                   </Td>
-                ))}
-              </tr>
-            ))}
-          </Table>
-        </div>
-        <ul className="divide-y divide-zinc-100 sm:hidden">
-          {rows.map((r) => (
-            <li key={r.manifest.slug} className="py-3">
-              <AppName manifest={r.manifest} />
-              <dl className="mt-2 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2">
-                {ENVIRONMENTS.map((env) => (
-                  <div key={env} className="contents">
-                    <dt className="pt-2 text-xs uppercase tracking-wide text-zinc-500">{env}</dt>
-                    <dd>
+                  {ENVIRONMENTS.map((env) => (
+                    <Td key={env}>
                       <Cell d={r.cells[env]} current={r.manifest.version} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </li>
-          ))}
-        </ul>
-      </Card>
+                    </Td>
+                  ))}
+                </tr>
+              ))}
+            </Table>
+          </div>
+          <ul className="divide-y divide-zinc-100 sm:hidden">
+            {g.rows.map((r) => (
+              <li key={r.manifest.slug} className="py-3">
+                <AppName manifest={r.manifest} />
+                <dl className="mt-2 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2">
+                  {ENVIRONMENTS.map((env) => (
+                    <div key={env} className="contents">
+                      <dt className="pt-2 text-xs uppercase tracking-wide text-zinc-500">{env}</dt>
+                      <dd>
+                        <Cell d={r.cells[env]} current={r.manifest.version} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+          </Card>
+        ))}
+      </div>
 
       {canPromote && <PromoteForm />}
     </>
@@ -179,10 +187,16 @@ function PromoteForm({ fixedApp }: { fixedApp?: string }) {
             <div className="mt-1">
               <Select name="appSlug" required defaultValue="">
                 <option value="" disabled>Choose…</option>
-                {apps.map((a) => (
-                  <option key={a.manifest.slug} value={a.manifest.slug}>
-                    {a.manifest.name} (v{a.manifest.version})
-                  </option>
+                {(["app", "platform"] as const).map((kind) => (
+                  <optgroup key={kind} label={kind === "app" ? "Apps" : "Platform"}>
+                    {apps
+                      .filter((a) => a.manifest.kind === kind)
+                      .map((a) => (
+                        <option key={a.manifest.slug} value={a.manifest.slug}>
+                          {a.manifest.name} (v{a.manifest.version})
+                        </option>
+                      ))}
+                  </optgroup>
                 ))}
               </Select>
             </div>

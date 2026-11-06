@@ -1,7 +1,7 @@
 import { asc } from "drizzle-orm";
 import { getDb } from "@/platform/db/client";
 import { can } from "@/platform/authz/rbac";
-import { appFlagKey, appSlugFromKey, isReservedKey, KILL_SWITCH_EXEMPT_SLUG } from "@/platform/flags";
+import { appSlugFromKey, isKillSwitchable, isReservedKey } from "@/platform/flags";
 import { apps, type AppPageProps } from "@/platform/registry";
 import { ActionButton, ActionForm } from "@/platform/ui/action-form";
 import { Badge, Callout, Card, EmptyState, PageHeader, SubmitButton, Table, Td, TextInput } from "@/platform/ui/primitives";
@@ -13,9 +13,11 @@ export default async function Page({ user }: AppPageProps) {
   const killSwitches = rows.filter((f) => isReservedKey(f.key));
   const flags = rows.filter((f) => !isReservedKey(f.key));
   const canEdit = can(user, manifest, "toggleFlag");
-  const appName = (key: string) => {
-    const slug = appSlugFromKey(key);
-    return apps.find((a) => a.manifest.slug === slug)?.manifest.name ?? slug ?? key;
+  const appFor = (key: string) => apps.find((a) => a.manifest.slug === appSlugFromKey(key));
+  const appName = (key: string) => appFor(key)?.manifest.name ?? appSlugFromKey(key) ?? key;
+  const switchable = (key: string) => {
+    const app = appFor(key);
+    return !app || isKillSwitchable(app.manifest);
   };
 
   return (
@@ -40,7 +42,7 @@ export default async function Page({ user }: AppPageProps) {
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge flag={f} />
-                  {canEdit && f.key !== appFlagKey(KILL_SWITCH_EXEMPT_SLUG) && <ToggleButton flag={f} />}
+                  {canEdit && switchable(f.key) && <ToggleButton flag={f} />}
                 </div>
               </li>
             ))}

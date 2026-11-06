@@ -6,6 +6,7 @@ export const manifest = defineManifest({
   description: "Turn features on and off without a deploy. Also holds the per-app kill switches (app:<slug>:enabled).",
   version: "1.0.0",
   owner: "platform-team",
+  kind: "platform",
   roles: {
     viewer: { description: "Can see flags and their state", groups: ["engineering", "support", "platform-admins"] },
     "flag-admin": { description: "Can create, toggle, roll out and delete flags", groups: ["engineering"] },

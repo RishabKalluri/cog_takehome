@@ -30,6 +30,7 @@ The request is "build/add/generate an app" for this repo (a Power Apps replaceme
 - Every mutation is a manifest-declared action with a role, invoked only through the gateway (`invokeAs`). No API routes, no server actions of your own.
 - Apps never import from other apps and never modify `src/platform/`. `pnpm validate` and ESLint enforce both.
 - Pages and components (any `.tsx`) never write to the DB; `.insert/.update/.delete` belong in `actions.ts`, `seed.ts` or `.ts` helpers that actions call. `pnpm validate` enforces this.
+- Leave `kind: "app"` in the manifest. `kind: "platform"` is only for operational surfaces owned by the platform team (audit log, deployments, flags); it changes how the shell lists the app and exempts it from the kill switch.
 - Only `actions.ts`, `seed.ts`, `schema.ts` and `.tsx` server components (reads only) may import `getDb` from `@/platform/db/client`; `import type { Db }` is fine anywhere. Test files are exempt from these rules.
 - After any `schema.ts` change: `pnpm db:generate`, commit `drizzle/`.
 - Before pushing: `pnpm check` and `pnpm lint` must pass; CI also runs `pnpm build`.

@@ -26,7 +26,7 @@ export default async function AppPage({ params, searchParams }: Props) {
     );
   }
 
-  if (!isAppEnabled(slug)) {
+  if (!isAppEnabled(app.manifest)) {
     if (!isPlatformAdmin(user)) {
       return (
         <>

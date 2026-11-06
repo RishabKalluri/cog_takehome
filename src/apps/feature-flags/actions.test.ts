@@ -4,6 +4,8 @@ import { users } from "@/platform/auth/users";
 import { listAudit } from "@/platform/audit/log";
 import { getDb, resetDbForTests } from "@/platform/db/client";
 import { appFlagKey, isAppEnabled, isFlagOn } from "@/platform/flags";
+import { getApp } from "@/platform/registry";
+import { featureFlags } from "./schema";
 import { seed } from "./seed";
 
 const byId = (id: string) => users.find((u) => u.id === id)!;
@@ -20,11 +22,13 @@ beforeAll(() => {
 });
 
 describe("feature-flags actions", () => {
-  it("seeds a kill switch for every app except itself", () => {
-    expect(isAppEnabled("example-notes")).toBe(true);
+  it("seeds a kill switch for every business app, none for platform apps", () => {
+    expect(isAppEnabled(getApp("example-notes")!.manifest)).toBe(true);
+    expect(isFlagOn(appFlagKey("audit-log"))).toBe(false); // platform app: no row
+    expect(isAppEnabled(getApp("audit-log")!.manifest)).toBe(true); // …and always enabled
     expect(isFlagOn(appFlagKey("example-notes"))).toBe(true);
     expect(isFlagOn(appFlagKey(APP))).toBe(false); // no row
-    expect(isAppEnabled(APP)).toBe(true); // …but always enabled
+    expect(isAppEnabled(getApp(APP)!.manifest)).toBe(true); // …but always enabled
   });
 
   it("viewers and outsiders cannot change flags", async () => {
@@ -98,6 +102,14 @@ describe("feature-flags actions", () => {
   it("the flags app can never be switched off", async () => {
     const res = await invokeAs(engineer, APP, "toggleFlag", { key: appFlagKey(APP), enabled: false });
     expect(res.ok).toBe(false);
-    expect(isAppEnabled(APP)).toBe(true);
+    expect(isAppEnabled(getApp(APP)!.manifest)).toBe(true);
+  });
+
+  it("platform apps cannot be switched off even if a row is created", async () => {
+    getDb().insert(featureFlags).values({ key: appFlagKey("audit-log"), description: "", enabled: true, rolloutPercent: 100, updatedAt: "", updatedBy: "test" }).run();
+    const res = await invokeAs(engineer, APP, "toggleFlag", { key: appFlagKey("audit-log"), enabled: false });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.status).toBe("failed"); // ActionError → "failed" (gateway convention)
+    expect(isAppEnabled(getApp("audit-log")!.manifest)).toBe(true);
   });
 });

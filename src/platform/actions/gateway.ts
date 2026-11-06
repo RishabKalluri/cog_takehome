@@ -58,7 +58,7 @@ export async function invokeAs(user: User, appSlug: string, actionName: string, 
       durationMs: Date.now() - started,
     });
 
-  if (!isAppEnabled(appSlug)) {
+  if (!isAppEnabled(app.manifest)) {
     finish("disabled", { error: "app disabled by kill switch" });
     return { ok: false, requestId, status: "disabled", error: `${app.manifest.name} is currently disabled by an administrator.` };
   }

@@ -25,6 +25,10 @@ export const ManifestSchema = z
     description: z.string().min(1),
     version: z.string().regex(/^\d+\.\d+\.\d+$/, "version must be semver"),
     owner: z.string().min(1),
+    /** `app` = a business app a team owns. `platform` = an operational surface
+     *  (audit log, deployments, feature flags) built on the same contract but
+     *  shown separately in the shell and exempt from the kill switch. */
+    kind: z.enum(["app", "platform"]).default("app"),
     roles: z.record(z.string(), RoleSchema),
     /** Minimum role needed to open the app at all. */
     viewRole: z.string(),
