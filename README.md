@@ -325,7 +325,7 @@ Built piece by piece so each can be assessed in isolation.
 |---|---|---|---|
 | 1 | **Platform core** — manifest, identity seam + mock users, RBAC, action gateway, audit log, versions, shell UI, reference app, tests, CI | The security/governance model and how small an app is | ✅ this PR |
 | 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | planned |
-| 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | ✅ PR #PRNUM |
+| 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | ✅ PR #5 |
 | 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | planned |
 | 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | planned |
 
