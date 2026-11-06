@@ -38,6 +38,20 @@ This POC keeps the governance and drops the canvas: apps are ordinary TypeScript
 | Review / testing | Hard | Normal code review, unit tests, CI checks on every PR |
 | Cost | Per-user/per-app licences | Hosting only |
 
+### How an "app" here maps onto Power Apps concepts
+
+Apps are **not** represented the way Power Apps represents them, but every Power Apps concept has a counterpart:
+
+| Power Apps concept | What it is there | Counterpart here |
+|---|---|---|
+| App (canvas / model-driven) | A definition built in the maker studio, stored in Dataverse | A folder `src/apps/<slug>/` of ordinary TypeScript/React |
+| Solution | Zip of app + tables + roles, exported/imported between environments | A git commit; the app's `manifest.ts` is the solution's metadata (name, version, owner) |
+| Environment (dev / test / prod) | Separate Dataverse instance per stage | Same code deployed per stage; `deployments` table records which app version is live where |
+| Security role + app sharing | Row/table privileges in Dataverse, app shared to groups | `roles` in the manifest, each granted by directory group; `viewRole` = "shared with" |
+| Power Automate flow / button `OnSelect` | Logic attached to UI | A named *action* in `actions.ts`, callable only through the gateway |
+| Dataverse table | Managed storage with optional auditing | `schema.ts` (Drizzle) with a migration; auditing is automatic for every action |
+| Maker studio | Where humans drag controls | A PR authored by Devin from `AGENTS.md` + the reference app |
+
 Honest note: Retool / Appsmith / Budibase are the off-the-shelf alternatives. The pitch here is *code you own*, generated on demand, with the same guarantees.
 
 ---
@@ -56,7 +70,7 @@ Written for someone who hasn't seen Power Apps' internals.
 
 **You always know what's running.** Every screen shows the platform version, environment and git commit. Each app has its own version in its manifest. A `deployments` table records which version of which app is in dev/staging/prod.
 
-**Try it as different people.** The top-right "Sign in as" switcher impersonates mock users with different groups so permissions can be demonstrated in seconds. (Demo only; removed when real login is wired in.)
+**Try it as different people.** The top-right "Signed in as" dropdown shows who you are; picking another name impersonates mock users with different groups so permissions can be demonstrated in seconds. (Demo only; removed when real login is wired in.)
 
 **Guardrails in CI.** `pnpm check` runs type-checking, the test suite, and `pnpm validate`, which fails the build if an app folder isn't registered, a manifest references an undeclared role, or an action is implemented without a declared role (and would therefore be unreachable).
 

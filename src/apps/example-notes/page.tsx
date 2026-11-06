@@ -29,8 +29,8 @@ export default async function Page({ user }: AppPageProps) {
           <ul className="divide-y divide-zinc-200">
             {rows.map((n) => (
               <li key={n.id} className="flex items-start justify-between gap-4 py-3">
-                <div>
-                  <p className="text-sm text-zinc-900">{n.body}</p>
+                <div className="min-w-0">
+                  <p className="text-sm break-words text-zinc-900">{n.body}</p>
                   <p className="mt-1 text-xs text-zinc-500">
                     {n.authorName} · {new Date(n.createdAt).toLocaleString()}
                   </p>
