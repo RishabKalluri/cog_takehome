@@ -4,6 +4,8 @@ import type { ActionImpl } from "./actions/define";
 import type { User } from "./auth/users";
 import type { Db } from "./db/client";
 import exampleNotes from "@/apps/example-notes";
+import auditLogApp from "@/apps/audit-log";
+import deploymentsApp from "@/apps/deployments";
 
 export type AppPageProps = {
   user: User;
@@ -20,7 +22,11 @@ export type AppDefinition = {
 };
 
 /** Every app ships here. `pnpm validate` fails if a folder under src/apps is missing. */
-export const apps: AppDefinition[] = [exampleNotes];
+export const apps: AppDefinition[] = [
+  exampleNotes,
+  auditLogApp,
+  deploymentsApp,
+];
 
 export function getApp(slug: string): AppDefinition | undefined {
   return apps.find((a) => a.manifest.slug === slug);
