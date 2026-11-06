@@ -37,8 +37,8 @@ export function checkAppSources(slug: string, files: SourceFile[]): string[] {
     const isTest = /\.test\.tsx?$/.test(base);
     const where = `src/apps/${slug}/${f.rel}`;
 
-    if (!isTest && DB_CLIENT_RE.test(f.content) && !DB_CLIENT_ALLOWED.includes(base)) {
-      errors.push(`${where}: imports @/platform/db/client — only ${DB_CLIENT_ALLOWED.join(", ")} may (pages read-only)`);
+    if (!isTest && DB_CLIENT_RE.test(f.content) && !DB_CLIENT_ALLOWED.includes(base) && !UI_FILE_RE.test(base)) {
+      errors.push(`${where}: imports @/platform/db/client — only ${DB_CLIENT_ALLOWED.join(", ")} and .tsx server components (read-only) may`);
     }
     if (!isTest && UI_FILE_RE.test(base)) {
       const writes = [...stripComments(f.content).matchAll(WRITE_RE)].map((m) => `.${m[1]}(`);

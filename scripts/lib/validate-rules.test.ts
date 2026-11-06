@@ -32,6 +32,11 @@ describe("validate: DB access rules", () => {
     expect(errors).toEqual([]);
   });
 
+  it("allows read-only DB access from .tsx server components other than page.tsx", () => {
+    const errors = checkAppSources("kyc", [{ rel: "queue.tsx", content: client + "const rows = getDb().select().from(cases).all();" }]);
+    expect(errors).toEqual([]);
+  });
+
   it("rejects live DB client imports outside the allowed files", () => {
     const errors = checkAppSources("notes", [{ rel: "helpers.ts", content: 'import { getDb } from "../../platform/db/client";' }]);
     expect(errors[0]).toMatch(/helpers\.ts: imports @\/platform\/db\/client/);
