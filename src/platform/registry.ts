@@ -6,6 +6,7 @@ import type { Db } from "./db/client";
 import exampleNotes from "@/apps/example-notes";
 import auditLogApp from "@/apps/audit-log";
 import deploymentsApp from "@/apps/deployments";
+import featureFlags from "@/apps/feature-flags";
 import kycReview from "@/apps/kyc-review";
 
 export type AppPageProps = {
@@ -27,6 +28,7 @@ export const apps: AppDefinition[] = [
   exampleNotes,
   auditLogApp,
   deploymentsApp,
+  featureFlags,
   kycReview,
 ];
 

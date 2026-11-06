@@ -2,7 +2,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { invokeAs } from "./gateway";
 import { users } from "../auth/users";
 import { listAudit } from "../audit/log";
-import { resetDbForTests } from "../db/client";
+import { getDb, resetDbForTests } from "../db/client";
+import { appFlagKey } from "../flags";
+import { seed as seedFlags } from "@/apps/feature-flags/seed";
 
 const byId = (id: string) => users.find((u) => u.id === id)!;
 const engineer = byId("u-sam"); // editor on example-notes
@@ -13,6 +15,7 @@ const admin = byId("u-priya");
 beforeAll(() => {
   process.env.DB_PATH = ":memory:";
   resetDbForTests();
+  seedFlags(getDb());
 });
 
 describe("action gateway", () => {
@@ -71,5 +74,34 @@ describe("action gateway", () => {
   it("platform admins hold every role", async () => {
     const res = await invokeAs(admin, "example-notes", "postNote", { body: "admin note" });
     expect(res.ok).toBe(true);
+  });
+
+  it("refuses every action of a killed app, logs it as disabled, and recovers when re-enabled", async () => {
+    const off = await invokeAs(admin, "feature-flags", "toggleFlag", { key: appFlagKey("example-notes"), enabled: false });
+    expect(off.ok).toBe(true);
+
+    const res = await invokeAs(engineer, "example-notes", "postNote", { body: "while disabled" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.status).toBe("disabled");
+      expect(res.error).toMatch(/disabled by an administrator/);
+    }
+    const [row] = listAudit({ appSlug: "example-notes", status: "disabled" });
+    expect(row.actorId).toBe(engineer.id);
+    expect(row.action).toBe("postNote");
+
+    // Admins are blocked too: the switch is about the app, not the person.
+    const adminRes = await invokeAs(admin, "example-notes", "postNote", { body: "admin while disabled" });
+    expect(adminRes.ok).toBe(false);
+
+    const on = await invokeAs(admin, "feature-flags", "toggleFlag", { key: appFlagKey("example-notes"), enabled: true });
+    expect(on.ok).toBe(true);
+    expect((await invokeAs(engineer, "example-notes", "postNote", { body: "back" })).ok).toBe(true);
+  });
+
+  it("the feature-flags app itself can never be disabled", async () => {
+    const res = await invokeAs(admin, "feature-flags", "toggleFlag", { key: appFlagKey("feature-flags"), enabled: false });
+    expect(res.ok).toBe(false);
+    expect((await invokeAs(admin, "feature-flags", "setRollout", { key: "platform.dark-mode", percent: 10 })).ok).toBe(true);
   });
 });

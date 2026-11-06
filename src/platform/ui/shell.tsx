@@ -5,6 +5,8 @@ import { users } from "../auth/users";
 import { apps } from "../registry";
 import { canView, rolesFor } from "../authz/rbac";
 import { buildInfo } from "../build-info";
+import { isAppEnabled } from "../flags";
+import { Badge } from "./primitives";
 import { UserSwitcher } from "./user-switcher";
 
 export function Shell({ user, children }: { user: User; children: ReactNode }) {
@@ -21,14 +23,17 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
         <nav className="flex flex-wrap gap-1 p-2 md:flex-1 md:flex-col md:flex-nowrap md:space-y-1 md:p-3">
           <NavLink href="/">Home</NavLink>
           <p className="hidden px-2 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-zinc-400 md:block">Apps</p>
-          {visible.map((a) => (
-            <NavLink key={a.manifest.slug} href={`/apps/${a.manifest.slug}`}>
-              <span className="flex items-center justify-between gap-2">
-                <span className="truncate">{a.manifest.name}</span>
-                <span className="shrink-0 text-xs text-zinc-400">v{a.manifest.version}</span>
-              </span>
-            </NavLink>
-          ))}
+          {visible.map((a) => {
+            const enabled = isAppEnabled(a.manifest.slug);
+            return (
+              <NavLink key={a.manifest.slug} href={`/apps/${a.manifest.slug}`} muted={!enabled}>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate">{a.manifest.name}</span>
+                  {enabled ? <span className="shrink-0 text-xs text-zinc-400">v{a.manifest.version}</span> : <Badge tone="red">disabled</Badge>}
+                </span>
+              </NavLink>
+            );
+          })}
           {visible.length === 0 && <p className="px-2 py-1.5 text-xs text-zinc-500">You don&apos;t have access to any apps.</p>}
         </nav>
         <div className="hidden border-t border-zinc-200 p-3 text-xs text-zinc-500 md:block">
@@ -54,9 +59,9 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
   );
 }
 
-function NavLink({ href, children }: { href: string; children: ReactNode }) {
+function NavLink({ href, muted = false, children }: { href: string; muted?: boolean; children: ReactNode }) {
   return (
-    <Link href={href} className="block min-w-0 rounded-md px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100">
+    <Link href={href} className={`block min-w-0 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-100 ${muted ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700"}`}>
       {children}
     </Link>
   );
