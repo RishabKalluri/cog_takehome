@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { featureFlags } from "@/apps/feature-flags/schema";
 import { getDb } from "./db/client";
+import type { AppManifest } from "./manifest";
 
 /**
  * Feature flags the platform itself reads. The table is owned by the
@@ -11,8 +12,9 @@ import { getDb } from "./db/client";
  * A missing flag means "enabled" so a new app is live until someone turns it off.
  */
 export const RESERVED_PREFIX = "app:";
-/** The flags app can never be killed, otherwise nobody could turn things back on. */
-export const KILL_SWITCH_EXEMPT_SLUG = "feature-flags";
+/** Only business apps can be killed. Platform surfaces (kind: "platform") are exempt,
+ *  otherwise an admin could lock themselves out of the flags/audit tooling. */
+export const isKillSwitchable = (m: Pick<AppManifest, "kind">) => m.kind === "app";
 
 export const appFlagKey = (slug: string) => `${RESERVED_PREFIX}${slug}:enabled`;
 export const isReservedKey = (key: string) => key.startsWith(RESERVED_PREFIX);
@@ -37,9 +39,9 @@ export function isFlagOn(key: string, subject?: string): boolean {
   return bucket(`${key}:${subject}`) < flag.rolloutPercent;
 }
 
-export function isAppEnabled(slug: string): boolean {
-  if (slug === KILL_SWITCH_EXEMPT_SLUG) return true;
-  const flag = getFlag(appFlagKey(slug));
+export function isAppEnabled(m: Pick<AppManifest, "slug" | "kind">): boolean {
+  if (!isKillSwitchable(m)) return true;
+  const flag = getFlag(appFlagKey(m.slug));
   return flag ? flag.enabled : true;
 }
 

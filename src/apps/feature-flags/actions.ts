@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { action, ActionError, defineActions } from "@/platform/actions/define";
-import { appFlagKey, isReservedKey, KILL_SWITCH_EXEMPT_SLUG } from "@/platform/flags";
+import { appSlugFromKey, isKillSwitchable, isReservedKey } from "@/platform/flags";
+import { getApp } from "@/platform/registry";
 import type { Db } from "@/platform/db/client";
 import { manifest } from "./manifest";
 import { featureFlags } from "./schema";
@@ -38,7 +39,9 @@ export const actions = defineActions(manifest, {
   ),
 
   toggleFlag: action(z.object({ key, enabled: boolish }), ({ db, user }, input) => {
-    if (input.key === appFlagKey(KILL_SWITCH_EXEMPT_SLUG)) throw new ActionError("The Feature Flags app cannot be disabled.", "invalid");
+    const targetSlug = appSlugFromKey(input.key);
+    const target = targetSlug ? getApp(targetSlug) : undefined;
+    if (target && !isKillSwitchable(target.manifest)) throw new ActionError(`${target.manifest.name} is a platform app and cannot be disabled.`, "invalid");
     const before = mustFind(db, input.key);
     const after = db
       .update(featureFlags)

@@ -6,6 +6,7 @@ export const manifest = defineManifest({
   description: "Which version of each app is recorded as live in dev, staging and prod, and the history behind it.",
   version: "1.0.0",
   owner: "platform-team",
+  kind: "platform",
   roles: {
     viewer: { description: "Can see what is deployed where", groups: ["engineering", "auditors", "platform-admins"] },
     releaser: { description: "Can record a promotion of an app to an environment", groups: ["engineering"] },
