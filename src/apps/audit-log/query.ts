@@ -22,7 +22,11 @@ export type AuditFilters = {
 
 type Params = Record<string, string | string[] | undefined>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
-const isDate = (v: string | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const isDate = (v: string | undefined): v is string => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+};
 
 /** Turns URL query params into a validated filter object. Unknown/garbage values are dropped, never thrown. */
 export function parseFilters(params: Params): AuditFilters {

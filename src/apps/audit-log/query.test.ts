@@ -24,6 +24,7 @@ describe("parseFilters", () => {
     expect(f).toMatchObject({ app: "kyc", status: "denied", from: "2026-01-01", to: undefined, page: 3, q: "x" });
     expect(parseFilters({ status: "bogus", page: "-1" })).toMatchObject({ status: undefined, page: 1 });
     expect(parseFilters({ app: "  " }).app).toBeUndefined();
+    expect(parseFilters({ to: "2026-99-99", from: "2026-02-30" })).toMatchObject({ to: undefined, from: undefined });
   });
 
   it("round-trips through toQuery (page 1 omitted)", () => {

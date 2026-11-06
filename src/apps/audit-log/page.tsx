@@ -44,7 +44,7 @@ function List({ filters }: { filters: AuditFilters }) {
       </div>
 
       <Card title="Filter">
-        <form method="get" action={BASE} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <form key={toQuery(filters)} method="get" action={BASE} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="App">
             <Select name="app" defaultValue={filters.app ?? ""}>
               <option value="">Any</option>
