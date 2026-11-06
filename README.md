@@ -239,6 +239,24 @@ Step-by-step "how to add an app" instructions (and the `pnpm new-app` scaffold +
 
 ---
 
+## Feature flags & kill switch
+
+**What a feature flag is.** A named on/off switch stored in the database (e.g. `refunds.instant-approval`) that code checks at runtime with `isFlagOn(key, userId?)`. Flipping it changes behaviour immediately, with no deploy. A flag can also be rolled out to a percentage of users: the same user always gets the same answer, so a 25 % rollout is a stable quarter of the staff, not a coin flip per click.
+
+**What the kill switch is and why it matters here.** This platform runs 10+ apps in *one* deployment (decision 2). If one app misbehaves — a bad release, a data-corrupting bug, a compliance question — you must be able to take *that app* offline in seconds without touching the others and without a redeploy. Every registered app has a reserved flag `app:<slug>:enabled`. Turning it off:
+
+- makes the **gateway refuse every action** of that app (the attempt is still written to the audit log with status `disabled`, so you can see who tried what while it was down);
+- **greys the app out** in the navigation with a `disabled` badge and shows "This app has been disabled by an administrator" instead of its screens;
+- lets **platform admins still open it** (behind a warning banner) to inspect state — but even they cannot run actions, the switch is about the app, not the person.
+
+Nothing is deleted or redeployed; turning the flag back on restores the app instantly. The Feature Flags app itself has no kill switch, so an admin can always get back in to flip things. Flipping a kill switch is an ordinary audited action (`feature-flags/toggleFlag`, before/after recorded), performed by anyone with the `flag-admin` role (group `engineering`) or a platform admin.
+
+**Try it.** Sign in as **Sam** → Feature Flags → "Turn off" next to `app:example-notes:enabled`. Team Notes is now greyed out; as **Omar** opening it shows the disabled notice; as **Priya** try posting a note — the gateway refuses and the audit log gains a `disabled` row. Turn it back on.
+
+**For app authors.** `import { isFlagOn, isAppEnabled } from "@/platform/flags"`. Both read the `feature_flags` table directly; a missing flag counts as *off* for ordinary flags and *enabled* for app kill switches (a newly registered app is live until someone turns it off; run `pnpm db:reset` to seed its switch row).
+
+---
+
 ## Identity: mock today, Entra ID tomorrow
 
 **What Entra ID is.** Microsoft's identity service (formerly Azure AD). If the client runs Power Apps, their staff already sign in with it and their team memberships ("KYC-Reviewers") are Entra security groups.
@@ -270,6 +288,7 @@ Kept short and current. Newest at the bottom.
 | 10 | **Mock identity with a user switcher** | Stub OIDC server; real Entra | Demo-ability and zero setup; the `IdentityProvider` seam keeps the swap contained. | Pilot with real users |
 | 11 | **Entra ID integration not built** | Build it now | Needs client tenant access; ~0.5 day; nothing in apps depends on it. | Client confirms Entra and provides a tenant |
 | 12 | **Build the audit viewer and feature flags *as apps*** | Hard-code them into the platform | Dogfoods the model and proves platform apps aren't special. | — |
+| 13 | **Kill switch = a reserved feature flag (`app:<slug>:enabled`) checked in the gateway** | Env var / config file (needs a redeploy or restart to flip — too slow in an incident, and not audited); a separate `app_status` table (one more thing to build UI, audit and permissions for); hiding the app in the nav only (UI-only, bypassable) | The flags app already has the UI, RBAC and audit trail, so a kill switch is one seeded row per app and one `if` in the gateway — flipping it is itself an audited action with before/after. Checking in the gateway (not the UI) means every mutation path is covered, including crafted requests. The flags app is exempt so an admin can always turn things back on. Cost: the platform reads one app-owned table (`src/platform/flags.ts`). | Flags need to vary per environment or per tenant — move the table into the platform schema |
 
 ---
 
@@ -287,7 +306,7 @@ Built piece by piece so each can be assessed in isolation.
 | # | Piece | What you can assess | Status |
 |---|---|---|---|
 | 1 | **Platform core** — manifest, identity seam + mock users, RBAC, action gateway, audit log, versions, shell UI, reference app, tests, CI | The security/governance model and how small an app is | ✅ this PR |
-| 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | planned |
+| 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | ✅ PR #PRNUM |
 | 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | planned |
 | 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | planned |
 | 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | planned |
