@@ -238,6 +238,22 @@ Screens are React server components. Any mutation is rendered with `<ActionForm 
 
 Step-by-step "how to add an app" instructions (and the `pnpm new-app` scaffold + Devin skill) land in roadmap item 5.
 
+### Audit log viewer
+
+An ordinary app (`src/apps/audit-log/`) that happens to read the platform's own `audit_log` table. It is read-only — its manifest declares **no actions** — and is visible to the `auditors` group and platform admins (sign in as **Lena** or **Priya**).
+
+What a compliance reviewer sees: a strip of counts per outcome (success / denied / invalid / failed / disabled) for the current filter, filters for app, actor, action, status, date range and a free-text search over entity and request ids (all in the URL, so a view can be bookmarked or pasted into a ticket), and a table of 50 rows per page, newest first. Clicking a row opens `/apps/audit-log/<id>` with every field, the action's input, and the record **before** and **after** pretty-printed, with changed fields highlighted and listed in a before/after table. Denied and failed attempts are first-class rows, which is the point: "who tried to do what they weren't allowed to" is one filter away.
+
+On a fresh database, `pnpm db:setup` produces ~15 sample rows by calling the real gateway as different mock users (so they went through RBAC and validation like live traffic); they are back-dated and their request ids start with `seed-` so they are easy to tell apart.
+
+### Deployments & versions
+
+Also an app (`src/apps/deployments/`). The main screen is a matrix of **app × environment** (dev / staging / prod) showing the version, short commit SHA, when and by whom it was recorded; a cell is highlighted amber when the recorded version is older than the app's current manifest version ("prod is behind"). Clicking an app opens its full history at `/apps/deployments/<slug>`. The `viewer` role goes to engineering, auditors and admins; `releaser` (engineering, e.g. **Sam**) can also use the one action, `promote`.
+
+What "promote" records: a new `deployments` row saying *the app's current manifest version, at this build's git SHA, is now live in environment X*, with optional notes — plus the normal audit row. It refuses to record the same version + SHA twice in one environment. `pnpm promote <app> <env> [notes]` writes the identical record from a terminal, credited to `cli:$USER`, so CI can call it as the last step of a real release.
+
+Honest caveat: **nothing is deployed.** Real deploys are CI's job; this is the ledger of what CI (or a human) says is live, kept where the audit trail and the version numbers already are. If the ledger and reality disagree, the ledger is wrong — which is why CI should write it, not people.
+
 ---
 
 ## KYC review queue
@@ -306,7 +322,9 @@ Kept short and current. Newest at the bottom.
 | 10 | **Mock identity with a user switcher** | Stub OIDC server; real Entra | Demo-ability and zero setup; the `IdentityProvider` seam keeps the swap contained. | Pilot with real users |
 | 11 | **Entra ID integration not built** | Build it now | Needs client tenant access; ~0.5 day; nothing in apps depends on it. | Client confirms Entra and provides a tenant |
 | 12 | **Build the audit viewer and feature flags *as apps*** | Hard-code them into the platform | Dogfoods the model and proves platform apps aren't special. | — |
-| 13 | **Workflow state machines live in each app's action handlers** (KYC: `expectStatus` / `expectAssignee` helpers + one `transition` per action), not in a generic workflow engine | A platform-level workflow/state-machine engine (declare states + transitions in the manifest); an external engine such as Temporal or Camunda; status columns with no enforcement | Every KYC rule (who may move a case, which states, the risk-score cut-off) is ~5 lines of ordinary TypeScript that a reviewer can read and a unit test can hit. The gateway already gives the parts a workflow engine sells (auth, audit, before/after). A generic engine would be a second DSL to design before any app benefits, and real rules ("high risk needs a supervisor") rarely fit a pure state table. | A third workflow app repeats the same helpers (then lift `expectStatus`/`transition` into `src/platform/workflow.ts`); or a workflow needs timers, SLAs or multi-step approvals that outlive one request |
+| 13 | **Viewer apps read platform tables directly, no API layer** (Audit Log and Deployments query `audit_log` / `deployments` with Drizzle from their server components) | An internal `/api/audit` layer; a repository/connector abstraction per table | Pages are server-only and read-only, so RBAC on the page (`viewRole`) is the whole access check; an API layer would be a second surface to secure for zero new capability. Cost: the apps couple to platform table shapes, so a schema change touches them. | A client outside this Next.js process needs the data, or row-level filtering of the audit trail per team |
+| 14 | **Promotion is a recorded event, not an orchestrated deploy** (`promote` action and `pnpm promote` insert a `deployments` row with the manifest version + build SHA) | Have the platform trigger CI / run the deploy; infer deployments from CI webhooks | The POC has no deploy target; recording keeps the "what is live where" question answerable (and audited, including denied attempts) without pretending to ship code. CI already owns releases; it should call `pnpm promote` as its last step. | A real pipeline exists — wire CI to write the row, then consider making the UI button trigger the pipeline behind an approval |
+| 15 | **Workflow state machines live in each app's action handlers** (KYC: `expectStatus` / `expectAssignee` helpers + one `transition` per action), not in a generic workflow engine | A platform-level workflow/state-machine engine (declare states + transitions in the manifest); an external engine such as Temporal or Camunda; status columns with no enforcement | Every KYC rule (who may move a case, which states, the risk-score cut-off) is ~5 lines of ordinary TypeScript that a reviewer can read and a unit test can hit. The gateway already gives the parts a workflow engine sells (auth, audit, before/after). A generic engine would be a second DSL to design before any app benefits, and real rules ("high risk needs a supervisor") rarely fit a pure state table. | A third workflow app repeats the same helpers (then lift `expectStatus`/`transition` into `src/platform/workflow.ts`); or a workflow needs timers, SLAs or multi-step approvals that outlive one request |
 
 ---
 
@@ -326,7 +344,7 @@ Built piece by piece so each can be assessed in isolation.
 | 1 | **Platform core** — manifest, identity seam + mock users, RBAC, action gateway, audit log, versions, shell UI, reference app, tests, CI | The security/governance model and how small an app is | ✅ this PR |
 | 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | planned |
 | 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | ✅ PR #5 |
-| 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | planned |
+| 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | ✅ PR #4 |
 | 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | planned |
 
 Pieces 2–5 are independent once 1 is merged and can be built in parallel (e.g. one Devin session each).
