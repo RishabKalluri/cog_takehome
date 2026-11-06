@@ -12,6 +12,17 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
+    // Apps are self-contained: they may only import the platform and their own folder (also enforced by `pnpm validate`).
+    files: ["src/apps/**/*.{ts,tsx}"],
+    ignores: ["src/apps/**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: ["@/apps/*", "@/apps/*/**"], message: "Apps may not import from other apps. Use relative imports within your own app and @/platform/* for shared code." }] },
+      ],
+    },
+  },
+  {
     ignores: [
       "node_modules/**",
       ".next/**",

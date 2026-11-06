@@ -1,14 +1,19 @@
 /**
  * Convention checks run in CI and by `pnpm check`:
- *  - every folder under src/apps is registered
- *  - manifests parse (roles referenced by actions/viewRole exist, semver, kebab slug)
+ *  - every folder under src/apps is registered, slugs are unique and match folders
+ *  - manifests parse (roles referenced by actions/viewRole exist, semver version,
+ *    non-empty owner, kebab slug — see src/platform/manifest.ts)
  *  - every manifest action has an implementation and vice versa
- *  - slugs are unique
+ *  - UI files (.tsx) never write to the DB (.insert/.update/.delete); writes live in actions or helpers they call
+ *  - only actions.ts, seed.ts, schema.ts, page.tsx import the live DB client (type-only imports are fine anywhere)
+ *  - apps never import from other apps (test files are exempt from all three source rules)
+ * Rule logic lives in scripts/lib/validate-rules.ts (unit-tested).
  */
 import fs from "node:fs";
 import path from "node:path";
 import { apps } from "@/platform/registry";
 import { ManifestSchema } from "@/platform/manifest";
+import { checkActionParity, checkAppSources, readAppSources } from "./lib/validate-rules";
 
 const errors: string[] = [];
 const appsDir = path.join(process.cwd(), "src", "apps");
@@ -19,13 +24,15 @@ for (const f of folders) if (!registered.has(f)) errors.push(`src/apps/${f} exis
 if (registered.size !== apps.length) errors.push("duplicate app slugs in registry");
 
 for (const app of apps) {
+  const slug = app.manifest.slug;
   const parsed = ManifestSchema.safeParse(app.manifest);
-  if (!parsed.success) errors.push(`${app.manifest.slug}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
-  if (!folders.includes(app.manifest.slug)) errors.push(`${app.manifest.slug}: slug must match its folder name under src/apps`);
-  const declared = Object.keys(app.manifest.actions);
-  const implemented = Object.keys(app.actions);
-  for (const a of declared) if (!implemented.includes(a)) errors.push(`${app.manifest.slug}: action "${a}" declared in manifest but not implemented`);
-  for (const a of implemented) if (!declared.includes(a)) errors.push(`${app.manifest.slug}: action "${a}" implemented but not declared in manifest (no role → would be unreachable)`);
+  if (!parsed.success) errors.push(`${slug}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  if (!folders.includes(slug)) {
+    errors.push(`${slug}: slug must match its folder name under src/apps`);
+    continue;
+  }
+  errors.push(...checkActionParity(slug, Object.keys(app.manifest.actions), Object.keys(app.actions)));
+  errors.push(...checkAppSources(slug, readAppSources(path.join(appsDir, slug))));
 }
 
 if (errors.length) {
