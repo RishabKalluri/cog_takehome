@@ -14,10 +14,11 @@ A small platform for building internal business apps (KYC review queue, refunds 
 4. [Demo script](#demo-script)
 5. [Architecture](#architecture)
 6. [Anatomy of an app](#anatomy-of-an-app)
-7. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
-8. [Decision log & tradeoffs](#decision-log--tradeoffs)
-9. [Deliberately not built (yet)](#deliberately-not-built-yet)
-10. [Roadmap](#roadmap)
+7. [Creating a new app with Devin](#creating-a-new-app-with-devin)
+8. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
+9. [Decision log & tradeoffs](#decision-log--tradeoffs)
+10. [Deliberately not built (yet)](#deliberately-not-built-yet)
+11. [Roadmap](#roadmap)
 
 ---
 
@@ -72,7 +73,7 @@ Written for someone who hasn't seen Power Apps' internals.
 
 **Try it as different people.** The top-right "Signed in as" dropdown shows who you are; picking another name impersonates mock users with different groups so permissions can be demonstrated in seconds. (Demo only; removed when real login is wired in.)
 
-**Guardrails in CI.** `pnpm check` runs type-checking, the test suite, and `pnpm validate`, which fails the build if an app folder isn't registered, a manifest references an undeclared role, or an action is implemented without a declared role (and would therefore be unreachable).
+**Guardrails in CI.** `pnpm check` runs type-checking, the test suite, and `pnpm validate`, which fails the build if an app folder isn't registered, a manifest references an undeclared role, an action is implemented without a declared role (and would therefore be unreachable), a page or component writes to the database directly, or an app imports from another app.
 
 ---
 
@@ -90,6 +91,7 @@ Other commands:
 |---|---|
 | `pnpm check` | typecheck + validate + tests (what CI runs, minus build) |
 | `pnpm validate` | app convention checks (see above) |
+| `pnpm new-app <slug> "<Name>" --owner <team> --entity <noun>` | scaffold a working CRUD app under `src/apps/<slug>` and register it |
 | `pnpm test` | vitest; gateway tests run against an in-memory SQLite |
 | `pnpm db:generate` | after changing any `schema.ts`, produce a new migration in `drizzle/` |
 | `pnpm db:reset` | wipe and reseed the local database |
@@ -203,7 +205,8 @@ src/
   app/                    Next.js routes: home, /apps/[slug]/[[...path]] → delegates to the app's Page
   db/schema.ts            aggregates platform + app tables for drizzle-kit
 drizzle/                  generated SQL migrations (versioned schema)
-scripts/                  db-setup, validate
+scripts/                  db-setup, validate (+ lib/validate-rules), new-app (+ lib/scaffold)
+.devin/skills/            new-internal-app/SKILL.md — the recipe Devin follows to turn a spec into an app PR
 .github/workflows/ci.yml  typecheck · lint · validate · test · build
 ```
 
@@ -235,7 +238,26 @@ Actions are tiny: a zod schema for the input plus a handler that receives `{ db,
 
 Screens are React server components. Any mutation is rendered with `<ActionForm app action>` or `<ActionButton …>`, which post to the gateway. Use `can(user, manifest, "action")` only to *hide* controls — the gateway is the real check.
 
-Step-by-step "how to add an app" instructions (and the `pnpm new-app` scaffold + Devin skill) land in roadmap item 5.
+Step-by-step instructions for adding an app are in the next section and in `.devin/skills/new-internal-app/SKILL.md`.
+
+---
+
+## Creating a new app with Devin
+
+This is the part that replaces the Power Apps maker studio. A business owner writes a three-line spec; Devin turns it into a pull request; a human reviews and merges.
+
+**The flow.**
+
+1. Someone writes a spec, e.g. *"Refunds dashboard for the payments team. Support agents can log a refund and move it through open → in progress → closed; team leads can archive. Everyone in finance can view."*
+2. A Devin session reads `AGENTS.md`, follows the skill in `.devin/skills/new-internal-app/SKILL.md`, and runs `pnpm new-app refunds-dashboard "Refunds Dashboard" --owner payments --entity refund`.
+3. Devin edits the generated folder to match the spec (real directory groups in the manifest, extra columns, extra actions, realistic seed data, tests), runs `pnpm db:generate`, `pnpm check`, `pnpm lint`, takes screenshots and opens a PR.
+4. CI runs the same checks plus a production build. A reviewer reads a ~200-line diff, not a canvas.
+
+**What the generator produces.** A complete, working app for one entity — table (`<slug>_<entity>s` with id, title, status, notes, created_by, created_at, updated_at), three actions (`create`, `update`, `archive`) with zod validation and before/after audit data, a responsive list + form page, seed rows, vitest tests for the happy path / denied role / invalid input — plus the two one-line registrations (`src/platform/registry.ts`, `src/db/schema.ts`). It passes `pnpm check`, `pnpm lint` and `pnpm build` with zero edits, so Devin starts from green and only has to change what the spec needs. It refuses to run if the slug already exists.
+
+**What guards it.** `pnpm validate` enforces the conventions the platform relies on: every app folder is registered; manifests are valid (semver version, non-empty owner, kebab slug, roles exist before actions reference them); declared actions ⇔ implemented actions; only `actions.ts`/`seed.ts` may write to the DB (pages are read-only, so RBAC and audit cannot be bypassed); apps never import from other apps (also an ESLint rule). These rules are unit-tested against fixture snippets in `scripts/lib/validate-rules.test.ts`.
+
+**Live demo (final step of the POC).** Give a fresh Devin session the Refunds spec above and watch it produce the PR. The Refunds app is deliberately *not* in this repo yet so that the demo is real.
 
 ---
 
@@ -270,6 +292,7 @@ Kept short and current. Newest at the bottom.
 | 10 | **Mock identity with a user switcher** | Stub OIDC server; real Entra | Demo-ability and zero setup; the `IdentityProvider` seam keeps the swap contained. | Pilot with real users |
 | 11 | **Entra ID integration not built** | Build it now | Needs client tenant access; ~0.5 day; nothing in apps depends on it. | Client confirms Entra and provides a tenant |
 | 12 | **Build the audit viewer and feature flags *as apps*** | Hard-code them into the platform | Dogfoods the model and proves platform apps aren't special. | — |
+| 13 | **Scaffold generator + lint/validate rules instead of a visual builder** | Drag-and-drop form builder; JSON app definitions rendered at runtime | The "maker" is Devin, so the cheapest leverage is a template that starts green and mechanical checks that keep it honest. A visual builder is a second product to maintain and reintroduces the un-reviewable artifacts we left Power Apps to escape. Cost: non-engineers cannot change an app without Devin or a developer. | Business users must self-serve edits without a PR |
 
 ---
 
@@ -290,6 +313,6 @@ Built piece by piece so each can be assessed in isolation.
 | 2 | **Feature-flags app** + per-app kill switch used by the shell | A real admin tool; platform dogfooding its own flags | planned |
 | 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | planned |
 | 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | planned |
-| 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | planned |
+| 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | ✅ PR #TBD |
 
 Pieces 2–5 are independent once 1 is merged and can be built in parallel (e.g. one Devin session each).
