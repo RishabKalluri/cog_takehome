@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/platform/auth/provider";
 import { apps } from "@/platform/registry";
 import { canView, rolesFor } from "@/platform/authz/rbac";
+import { isAppEnabled } from "@/platform/flags";
 import { Badge, PageHeader } from "@/platform/ui/primitives";
 
 export default async function Home() {
@@ -13,17 +14,19 @@ export default async function Home() {
         {apps.map(({ manifest }) => {
           const roles = rolesFor(user, manifest);
           const ok = canView(user, manifest);
+          const enabled = isAppEnabled(manifest.slug);
           return (
             <li key={manifest.slug} className="flex min-w-0 flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
               <div className="min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate font-medium">{manifest.name}</p>
+                  <p className={`truncate font-medium ${enabled ? "" : "text-zinc-400"}`}>{manifest.name}</p>
                   <span className="shrink-0 font-mono text-xs text-zinc-500">v{manifest.version}</span>
                 </div>
                 <p className="mt-1 text-sm text-zinc-600">{manifest.description}</p>
                 <p className="mt-1 text-xs text-zinc-500">owner: {manifest.owner}</p>
               </div>
               <div className="flex flex-wrap gap-1">
+                {!enabled && <Badge tone="red">disabled</Badge>}
                 {roles.length ? roles.map((r) => <Badge key={r} tone="blue">{r}</Badge>) : <Badge tone="neutral">no access</Badge>}
               </div>
               <div className="mt-auto">
