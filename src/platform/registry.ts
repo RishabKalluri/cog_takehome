@@ -6,6 +6,7 @@ import type { Db } from "./db/client";
 import exampleNotes from "@/apps/example-notes";
 import auditLogApp from "@/apps/audit-log";
 import deploymentsApp from "@/apps/deployments";
+import featureFlags from "@/apps/feature-flags";
 
 export type AppPageProps = {
   user: User;
@@ -26,6 +27,7 @@ export const apps: AppDefinition[] = [
   exampleNotes,
   auditLogApp,
   deploymentsApp,
+  featureFlags,
 ];
 
 export function getApp(slug: string): AppDefinition | undefined {

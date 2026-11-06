@@ -7,6 +7,7 @@ import type { User } from "../auth/users";
 import { recordAudit } from "../audit/log";
 import { getDb } from "../db/client";
 import { buildInfo } from "../build-info";
+import { isAppEnabled } from "../flags";
 import { ActionError, type ActionOutcome } from "./define";
 
 export type InvokeResult =
@@ -15,9 +16,9 @@ export type InvokeResult =
 
 /**
  * The single choke point for every mutation in every app.
- *   1. resolve app + action     3. validate input (zod)
- *   2. authorize (RBAC)         4. run handler
- *   5. write audit row (always, even on failure)
+ *   1. resolve app + action     4. validate input (zod)
+ *   2. kill switch (app flag)   5. run handler
+ *   3. authorize (RBAC)         6. write audit row (always, even on failure)
  */
 export async function invokeAs(user: User, appSlug: string, actionName: string, rawInput: unknown): Promise<InvokeResult> {
   const requestId = randomUUID();
@@ -56,6 +57,11 @@ export async function invokeAs(user: User, appSlug: string, actionName: string, 
       error: extra.error,
       durationMs: Date.now() - started,
     });
+
+  if (!isAppEnabled(appSlug)) {
+    finish("disabled", { error: "app disabled by kill switch" });
+    return { ok: false, requestId, status: "disabled", error: `${app.manifest.name} is currently disabled by an administrator.` };
+  }
 
   if (!canView(user, app.manifest) || !can(user, app.manifest, actionName)) {
     finish("denied", { error: `requires role "${actionDef.role}"` });
