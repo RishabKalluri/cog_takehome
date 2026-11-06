@@ -8,7 +8,7 @@ import auditLogApp from "@/apps/audit-log";
 import deploymentsApp from "@/apps/deployments";
 import featureFlags from "@/apps/feature-flags";
 import kycReview from "@/apps/kyc-review";
-
+import refundsDashboard from "@/apps/refunds-dashboard";
 export type AppPageProps = {
   user: User;
   /** Sub-path under /apps/<slug>/..., so apps can have their own routes. */
@@ -30,6 +30,7 @@ export const apps: AppDefinition[] = [
   deploymentsApp,
   featureFlags,
   kycReview,
+  refundsDashboard,
 ];
 
 export function getApp(slug: string): AppDefinition | undefined {
