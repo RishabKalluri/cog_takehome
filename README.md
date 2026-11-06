@@ -17,10 +17,11 @@ A small platform for building internal business apps (KYC review queue, refunds 
 7. [Creating a new app with Devin](#creating-a-new-app-with-devin)
 8. [Feature flags & kill switch](#feature-flags--kill-switch)
 9. [KYC review queue](#kyc-review-queue)
-10. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
-11. [Decision log & tradeoffs](#decision-log--tradeoffs)
-12. [Deliberately not built (yet)](#deliberately-not-built-yet)
-13. [Roadmap](#roadmap)
+10. [Refunds Dashboard](#refunds-dashboard)
+11. [Identity: mock today, Entra ID tomorrow](#identity-mock-today-entra-id-tomorrow)
+12. [Decision log & tradeoffs](#decision-log--tradeoffs)
+13. [Deliberately not built (yet)](#deliberately-not-built-yet)
+14. [Roadmap](#roadmap)
 
 ---
 
@@ -333,6 +334,36 @@ stateDiagram-v2
 
 ---
 
+## Refunds Dashboard
+
+The second workflow app (roadmap item 6) and the first one generated from the `pnpm new-app` scaffold + the `new-internal-app` skill. A refund request is one customer asking for money back on an order: order id, customer, amount, currency and their reason. The payments team takes each request through a decision and a payout, and the audit log answers "who approved this refund, who paid it, and who tried to approve a big one and was refused".
+
+**The workflow.** A refund starts `requested`. An agent *approves* it (amounts under **500** in the refund's own currency) or *rejects* it with a written reason. Refunds of **500 or more need a lead** — `approve` fails with a conflict pointing at `approveLarge`, which only leads hold; `approveLarge` on a small refund fails too, so the two approvals stay distinct in the audit trail. Once approved, a lead *marks it paid*. All of this is enforced in `src/apps/refunds-dashboard/actions.ts`; the screens only hide buttons that would fail. Amounts are stored as integer minor units and formatted per currency; the threshold is nominal (500 USD, 500 EUR and 500 GBP all count as large — no FX in the POC).
+
+```mermaid
+stateDiagram-v2
+  [*] --> requested
+  requested --> approved: approve (agent, amount < 500)
+  requested --> approved: approveLarge (lead, amount >= 500)
+  requested --> rejected: reject (agent, reason required)
+  approved --> paid: markPaid (lead)
+```
+
+**Who can do what (mock users).**
+
+| Step | Use | Why |
+|---|---|---|
+| Read the queue, nothing else | **Lena** (auditors) | `viewer` role only — read-only banner, no buttons, crafted requests denied *and logged* |
+| Approve small refunds, reject any refund | **Omar** (support + refunds-agents) | `agent` |
+| Approve large refunds, mark approved refunds paid | **Dana** (refunds-leads) | `lead` — leads are *not* implicitly agents (flat roles, decision 3), so Dana sees no small-refund approve or reject button |
+| See the app at all | **not Sam, not Marcus** | Neither holds a group granting `viewer` |
+
+**Suggested demo (5 clicks).** As Omar, open *Refunds Dashboard* → **Approve** Aisha Rahman (£49.99) → note the amber rows (Grace $1,250, Mei $500) say "Needs a lead to approve" → **Reject…** Jonas Lindqvist, type a reason. Switch to Dana → **Approve as lead** on Grace → **Mark paid** on Daniel Brooks. Switch to Lena: read-only. Every step, including Omar's refused large approval if you try it from the URL bar, is in the Audit Log with before/after.
+
+**Not built.** No `request` action — rows come from seed; in reality an order system would create them (an `agent`-role action is a 10-line addition). Below `md` (768px) the queue renders as a card list instead of the table so the action buttons stay reachable on a phone.
+
+---
+
 ## Identity: mock today, Entra ID tomorrow
 
 **What Entra ID is.** Microsoft's identity service (formerly Azure AD). If the client runs Power Apps, their staff already sign in with it and their team memberships ("KYC-Reviewers") are Entra security groups.
@@ -370,6 +401,7 @@ Kept short and current. Newest at the bottom.
 | 16 | **Workflow state machines live in each app's action handlers** (KYC: `expectStatus` / `expectAssignee` helpers + one `transition` per action), not in a generic workflow engine | A platform-level workflow/state-machine engine (declare states + transitions in the manifest); an external engine such as Temporal or Camunda; status columns with no enforcement | Every KYC rule (who may move a case, which states, the risk-score cut-off) is ~5 lines of ordinary TypeScript that a reviewer can read and a unit test can hit. The gateway already gives the parts a workflow engine sells (auth, audit, before/after). A generic engine would be a second DSL to design before any app benefits, and real rules ("high risk needs a supervisor") rarely fit a pure state table. | A third workflow app repeats the same helpers (then lift `expectStatus`/`transition` into `src/platform/workflow.ts`); or a workflow needs timers, SLAs or multi-step approvals that outlive one request |
 | 17 | **Scaffold generator + lint/validate rules instead of a visual builder** | Drag-and-drop form builder; JSON app definitions rendered at runtime | The "maker" is Devin, so the cheapest leverage is a template that starts green and mechanical checks that keep it honest. A visual builder is a second product to maintain and reintroduces the un-reviewable artifacts we left Power Apps to escape. Cost: non-engineers cannot change an app without Devin or a developer. | Business users must self-serve edits without a PR |
 | 18 | **Platform surfaces are apps with `kind: "platform"`, not a separate code path** (Audit Log, Deployments, Feature Flags) | A hand-built admin area under `src/platform/` with its own routing and auth | They get RBAC, audit and versioning for free and prove the contract can host the platform itself; `kind` is enough for the shell to list them separately, for the kill switch to exempt them and for the deployments matrix to split them. Cost: a one-word field a reviewer must notice — `pnpm new-app` always emits `kind: "app"`. | Platform apps need capabilities business apps must never have (e.g. reading every table); then move them behind a `src/platform/apps/` boundary |
+| 19 | **Large-refund gate is a separate action (`approveLarge`), not a parameter or a check inside `approve`** | One `approve` action whose handler checks `amount >= 500 && !isLead`; a `threshold` field in the manifest | Roles are per action in this platform, so a distinct action lets the manifest alone say who may approve large refunds, the gateway denies agents before any handler runs (and logs the denial), and the audit trail names the step. Cost: two approve buttons in the UI and two handlers sharing a helper. | Thresholds must vary per currency/team at runtime — then move the number to a feature flag or a config table and keep the two actions |
 
 ---
 
@@ -391,5 +423,6 @@ Built piece by piece so each can be assessed in isolation.
 | 3 | **KYC review queue** — claim / approve / reject / escalate with state machine and before/after audit | A workflow app, not CRUD; what the audit trail looks like under load | ✅ [PR #5](https://github.com/RishabKalluri/cog_takehome/pull/5) |
 | 4 | **Audit-log viewer + deployments panel** | Compliance view; versions per environment | ✅ PR #4 |
 | 5 | **`pnpm new-app` scaffold, Devin skill, convention lints** | Generate the Refunds dashboard live with Devin | ✅ PR #3 |
+| 6 | **Refunds Dashboard** — approve / reject / approveLarge / markPaid, generated from the scaffold + skill | What Devin produces from a 6-line spec; a second workflow app without new platform code | ✅ [PR #7](https://github.com/RishabKalluri/cog_takehome/pull/7) |
 
-Pieces 2–5 are independent once 1 is merged and can be built in parallel (e.g. one Devin session each).
+Pieces 2–6 are independent once 1 is merged and can be built in parallel (e.g. one Devin session each).
