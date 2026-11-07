@@ -12,7 +12,7 @@ The request is "build/add/generate an app" for this repo (a Power Apps replaceme
 `pnpm new-app` writes a working one-entity CRUD app (table + `create`/`update`/`archive` actions + list page + seed + tests), registers it, and the platform does the rest: nav entry, role check on open, audit row for every action, version badge. Your job is to turn the generic entity into the one in the spec.
 
 ## Steps
-1. **Read the contract**: `AGENTS.md`, then README sections "Anatomy of an app" and "Decision log". Skim `src/apps/example-notes/` (~120 lines).
+1. **Read the contract**: `AGENTS.md`, then the README section "Anatomy of an app" and `docs/DECISIONS.md`. Skim `src/apps/example-notes/` (~120 lines).
 2. **Branch** off latest `main`: `git checkout -b devin/$(date +%s)-<slug>`.
 3. **Scaffold**: `pnpm new-app <slug> "<Display Name>" --owner <team> --entity <singular-noun>` (slug kebab-case). It creates `manifest.ts, schema.ts, actions.ts, page.tsx, seed.ts, index.ts, actions.test.ts`, appends one line to `src/platform/registry.ts` and one to `src/db/schema.ts`. Refuses if the slug exists.
 4. **Manifest first** (`manifest.ts`): set `description`; replace placeholder groups with real directory groups from `src/platform/auth/users.ts` (e.g. `kyc-reviewers`, `support`, `engineering`, `auditors`); add every action the spec needs with the role that may call it. Roles must exist before actions reference them. Prefer adding a group to an existing mock user over adding users.
@@ -23,7 +23,7 @@ The request is "build/add/generate an app" for this repo (a Power Apps replaceme
 9. **Tests** (`actions.test.ts`): keep the generated ones, add one per business rule (happy path, denied role, conflict). Pattern: `process.env.DB_PATH = ":memory:"; resetDbForTests();` in `beforeAll`, then `invokeAs(user, slug, action, input)` and inspect `listAudit(...)`.
 10. **Reset + verify**: `pnpm db:reset` (seeds only run on an empty DB), `pnpm check` (typecheck + validate + vitest), `pnpm lint`, `pnpm build`. All must be green with no warnings you introduced.
 11. **Look at it**: `pnpm dev`, open `/apps/<slug>` as a user with the editor role and as one without (user switcher top-right). Take 2–3 screenshots (desktop + narrow).
-12. **README**: add a Roadmap row with the PR number, append a decision-log row for any tradeoff, and add a short paragraph for the app under "Apps" (3–5 lines: who can do what, the state machine, anything not built). Do not reorder or reformat existing rows; keep it concise.
+12. **README**: add a Roadmap row with the PR number, append a row to `docs/DECISIONS.md` for any tradeoff, and add a short paragraph for the app under "Apps" (3–5 lines: who can do what, the state machine, anything not built). Do not reorder or reformat existing rows; keep it concise.
 13. **PR**: plain-English summary (reader does not know Power Apps internals), "demo in 5 clicks" with which mock user to pick, platform changes (ideally only the two one-line registrations), tradeoffs, screenshots.
 
 ## Platform rules (from AGENTS.md, restated)
