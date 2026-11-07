@@ -23,7 +23,7 @@ The request is "build/add/generate an app" for this repo (a Power Apps replaceme
 9. **Tests** (`actions.test.ts`): keep the generated ones, add one per business rule (happy path, denied role, conflict). Pattern: `process.env.DB_PATH = ":memory:"; resetDbForTests();` in `beforeAll`, then `invokeAs(user, slug, action, input)` and inspect `listAudit(...)`.
 10. **Reset + verify**: `pnpm db:reset` (seeds only run on an empty DB), `pnpm check` (typecheck + validate + vitest), `pnpm lint`, `pnpm build`. All must be green with no warnings you introduced.
 11. **Look at it**: `pnpm dev`, open `/apps/<slug>` as a user with the editor role and as one without (user switcher top-right). Take 2–3 screenshots (desktop + narrow).
-12. **README**: flip your Roadmap row to ✅ with the PR number, append decision-log rows for any tradeoff, add a short section about the app under its own heading. Do not reorder existing content.
+12. **README**: add a Roadmap row with the PR number, append a decision-log row for any tradeoff, and add a short paragraph for the app under "Apps" (3–5 lines: who can do what, the state machine, anything not built). Do not reorder or reformat existing rows; keep it concise.
 13. **PR**: plain-English summary (reader does not know Power Apps internals), "demo in 5 clicks" with which mock user to pick, platform changes (ideally only the two one-line registrations), tradeoffs, screenshots.
 
 ## Platform rules (from AGENTS.md, restated)
